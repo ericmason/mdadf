@@ -4,6 +4,12 @@ A Go library that converts Markdown to Atlassian Document Format (ADF) for use w
 
 ## Installation
 
+**Install the CLI tool:**
+```bash
+go install github.com/ericmason/mdadf/cmd/mdadf@latest
+```
+
+**Or install as a library:**
 ```bash
 go get github.com/ericmason/mdadf
 ```
