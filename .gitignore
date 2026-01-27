@@ -4,8 +4,8 @@
 *.dll
 *.so
 *.dylib
-mdadf
-mdadf.exe
+/mdadf
+/mdadf.exe
 
 # Test binary, built with `go test -c`
 *.test
