@@ -107,7 +107,17 @@ jobs:
         run: |
           release_id=${{ steps.create_release.outputs.release_id }}
           find artifacts -type f \( -name 'mdadf*' -o -name '*.sha256' \) | while read -r file; do
-            asset_name=$(basename "$file")
+            # Get the directory name (platform) and filename
+            dir_name=$(dirname "$file" | xargs basename)
+            file_name=$(basename "$file")
+            # Use directory name as prefix if it's not already in the filename
+            if [[ "$file_name" == "mdadf"* ]] && [[ "$dir_name" != "artifacts" ]]; then
+              asset_name="${dir_name}/${file_name}"
+              # Remove artifacts/ prefix if present
+              asset_name="${asset_name#artifacts/}"
+            else
+              asset_name="$file_name"
+            fi
             echo "Uploading $asset_name from $file"
             curl -X POST \
               -H "Accept: application/vnd.github+json" \
