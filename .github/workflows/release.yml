@@ -48,11 +48,12 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          EXT: ${{ matrix.ext }}
         run: |
-          OUTPUT_NAME="mdadf${matrix.ext}"
+          OUTPUT_NAME="mdadf${EXT}"
           go build -o "${OUTPUT_NAME}" ./cmd/mdadf
           echo "ASSET_PATH=${OUTPUT_NAME}" >> $GITHUB_ENV
-          echo "ASSET_NAME=mdadf-${matrix.goos}-${matrix.goarch}${matrix.ext}" >> $GITHUB_ENV
+          echo "ASSET_NAME=mdadf-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

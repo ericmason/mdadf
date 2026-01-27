@@ -28,10 +28,13 @@ jobs:
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage
+        if: always()
+        continue-on-error: true
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.out
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   build:
     runs-on: ${{ matrix.os }}
