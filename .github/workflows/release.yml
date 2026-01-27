@@ -91,5 +91,6 @@ jobs:
           generate_release_notes: true
           draft: false
           make_latest: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
