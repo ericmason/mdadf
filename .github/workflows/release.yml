@@ -88,8 +88,6 @@ jobs:
           files: |
             **/mdadf*
           generate_release_notes: true
-          draft: false
-          prerelease: ${{ contains(github.ref, '-') }}
-          overwrite_files: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
