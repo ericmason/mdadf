@@ -69,11 +69,12 @@ jobs:
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Create checksums
         run: |
-          cd ${{ github.workspace }}
-          find . -type f -name 'mdadf*' -not -name '*.sha256' | while read -r file; do
+          find artifacts -type f -name 'mdadf*' -not -name '*.sha256' | while read -r file; do
             if command -v sha256sum > /dev/null; then
               sha256sum "$file" > "${file}.sha256"
             else
@@ -86,7 +87,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            **/mdadf*
+            artifacts/**/*
           generate_release_notes: true
           draft: false
           make_latest: true
