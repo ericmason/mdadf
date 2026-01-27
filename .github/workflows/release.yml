@@ -83,14 +83,23 @@ jobs:
           done
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: ncipollo/create-release@v1
+        id: create_release
         with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            artifacts/**/*
-          generate_release_notes: true
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          generateReleaseNotes: true
           draft: false
-          make_latest: true
-          fail_on_unmatched_files: false
+          prerelease: ${{ contains(github.ref, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Assets
+        run: |
+          find artifacts -type f \( -name 'mdadf*' -o -name '*.sha256' \) | while read -r file; do
+            asset_name=$(basename "$file")
+            echo "Uploading $asset_name from $file"
+            gh release upload "${{ github.ref_name }}" "$file" --clobber || echo "Failed to upload $asset_name"
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
