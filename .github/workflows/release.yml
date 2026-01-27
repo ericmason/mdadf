@@ -110,11 +110,13 @@ jobs:
             # Get the directory name (platform) and filename
             dir_name=$(dirname "$file" | xargs basename)
             file_name=$(basename "$file")
-            # Use directory name as prefix if it's not already in the filename
-            if [[ "$file_name" == "mdadf"* ]] && [[ "$dir_name" != "artifacts" ]]; then
-              asset_name="${dir_name}/${file_name}"
-              # Remove artifacts/ prefix if present
-              asset_name="${asset_name#artifacts/}"
+            # Use directory name as the asset name (it already contains platform info)
+            if [[ "$dir_name" != "artifacts" ]] && [[ "$dir_name" == "mdadf-"* ]]; then
+              asset_name="$dir_name"
+              # If it's a checksum file, append .sha256
+              if [[ "$file_name" == *.sha256 ]]; then
+                asset_name="${asset_name}.sha256"
+              fi
             else
               asset_name="$file_name"
             fi
