@@ -83,23 +83,39 @@ jobs:
           done
 
       - name: Create Release
-        uses: ncipollo/create-release@v1
         id: create_release
-        with:
-          tag: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          generateReleaseNotes: true
-          draft: false
-          prerelease: ${{ contains(github.ref, '-') }}
+        run: |
+          response=$(curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/releases \
+            -d '{
+              "tag_name": "${{ github.ref_name }}",
+              "name": "Release ${{ github.ref_name }}",
+              "generate_release_notes": true,
+              "draft": false,
+              "prerelease": ${{ contains(github.ref, '-') }}
+            }')
+          release_id=$(echo "$response" | jq -r '.id')
+          echo "release_id=$release_id" >> $GITHUB_OUTPUT
+          echo "Created release with ID: $release_id"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Release Assets
         run: |
+          release_id=${{ steps.create_release.outputs.release_id }}
           find artifacts -type f \( -name 'mdadf*' -o -name '*.sha256' \) | while read -r file; do
             asset_name=$(basename "$file")
             echo "Uploading $asset_name from $file"
-            gh release upload "${{ github.ref_name }}" "$file" --clobber || echo "Failed to upload $asset_name"
+            curl -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@$file" \
+              "https://uploads.github.com/repos/${{ github.repository }}/releases/$release_id/assets?name=$asset_name" || echo "Failed to upload $asset_name"
           done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
