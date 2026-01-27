@@ -34,7 +34,6 @@ jobs:
         with:
           file: ./coverage.out
           fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
 
   build:
     runs-on: ${{ matrix.os }}
@@ -60,7 +59,7 @@ jobs:
       - name: Test build
         run: |
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            ./mdadf.exe -h || true
+            .\mdadf.exe -h || exit 0
           else
-            ./mdadf -h || true
+            ./mdadf -h || exit 0
           fi
