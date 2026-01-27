@@ -146,6 +146,41 @@ Pre-built binaries are available in the [Releases](https://github.com/ericmason/
 - HTML blocks are preserved as plain text
 - GFM extensions (tables, strikethrough) are supported via goldmark
 
+## Release Process
+
+Releases are created automatically via GitHub Actions when a version tag is pushed.
+
+### Creating a Release
+
+1. **Update version**: Make any necessary code changes
+2. **Commit changes**: 
+   ```bash
+   git add .
+   git commit -m "Your commit message"
+   git push
+   ```
+3. **Create and push tag**:
+   ```bash
+   git tag v0.1.2
+   git push origin v0.1.2
+   ```
+
+The release workflow will automatically:
+- Build binaries for Linux (amd64, arm64), macOS (amd64, arm64), and Windows (amd64, arm64)
+- Generate SHA256 checksums for all binaries
+- Create a GitHub release with all assets
+- Generate release notes from commits
+
+### Version Numbering
+
+Follow [Semantic Versioning](https://semver.org/):
+- **MAJOR.MINOR.PATCH** (e.g., `v1.0.0`)
+- **MAJOR**: Breaking changes
+- **MINOR**: New features (backward compatible)
+- **PATCH**: Bug fixes (backward compatible)
+
+Pre-release versions can use tags like `v1.0.0-alpha.1` or `v1.0.0-beta.1`.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
