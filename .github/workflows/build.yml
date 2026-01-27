@@ -57,9 +57,10 @@ jobs:
         run: go build -v ./cmd/mdadf
 
       - name: Test build
+        shell: bash
         run: |
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            .\mdadf.exe -h || exit 0
+            ./mdadf.exe -h || exit 0
           else
             ./mdadf -h || exit 0
           fi
