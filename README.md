@@ -64,6 +64,8 @@ This is **bold** and *italic* text with a [link](https://example.com).
 | `~~strike~~` | `text` with `strike` mark |
 | `[link](url)` | `text` with `link` mark |
 | `- item` | `bulletList` > `listItem` |
+| `- [ ] item` | `taskList` > `taskItem` (`TODO`) |
+| `- [x] item` | `taskList` > `taskItem` (`DONE`) |
 | `1. item` | `orderedList` > `listItem` |
 | ` ```lang ` | `codeBlock` with language |
 | `> quote` | `blockquote` |
@@ -151,6 +153,7 @@ Pre-built binaries are available in the [Releases](https://github.com/ericmason/
 - Images are converted to links since ADF media requires Atlassian-specific IDs
 - HTML blocks are preserved as plain text
 - GFM extensions (tables, strikethrough) are supported via goldmark
+- GitHub task list items are converted to Jira-compatible `taskList` / `taskItem` nodes
 
 ## Release Process
 

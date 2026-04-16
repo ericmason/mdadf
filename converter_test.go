@@ -277,6 +277,116 @@ func TestConvert_NestedList(t *testing.T) {
 	}
 }
 
+func TestConvert_TaskList(t *testing.T) {
+	md := `- [ ] First task
+- [x] Second task`
+
+	doc, err := ConvertToDoc(md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(doc.Content) != 1 {
+		t.Fatalf("expected 1 content node, got %d", len(doc.Content))
+	}
+
+	list := doc.Content[0]
+	if list.Type != "taskList" {
+		t.Fatalf("expected taskList, got %s", list.Type)
+	}
+
+	if len(list.Content) != 2 {
+		t.Fatalf("expected 2 task items, got %d", len(list.Content))
+	}
+
+	tests := []struct {
+		index         int
+		expectedState string
+		expectedText  string
+	}{
+		{0, "TODO", "First task"},
+		{1, "DONE", "Second task"},
+	}
+
+	for _, tt := range tests {
+		item := list.Content[tt.index]
+		if item.Type != "taskItem" {
+			t.Fatalf("item %d: expected taskItem, got %s", tt.index, item.Type)
+		}
+
+		var attrs TaskItemAttrs
+		if err := json.Unmarshal(item.Attrs, &attrs); err != nil {
+			t.Fatalf("item %d: failed to unmarshal attrs: %v", tt.index, err)
+		}
+		if attrs.LocalID == "" {
+			t.Fatalf("item %d: expected localId to be set", tt.index)
+		}
+		if attrs.State != tt.expectedState {
+			t.Fatalf("item %d: expected state %s, got %s", tt.index, tt.expectedState, attrs.State)
+		}
+
+		var text string
+		for _, node := range item.Content {
+			text += node.Text
+		}
+		if text != tt.expectedText {
+			t.Fatalf("item %d: expected text %q, got %q", tt.index, tt.expectedText, text)
+		}
+	}
+}
+
+func TestConvert_NestedTaskList(t *testing.T) {
+	md := `- [x] Parent
+  - [ ] Child
+- [ ] Sibling`
+
+	doc, err := ConvertToDoc(md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	list := doc.Content[0]
+	if list.Type != "taskList" {
+		t.Fatalf("expected taskList, got %s", list.Type)
+	}
+	var listAttrs TaskListAttrs
+	if err := json.Unmarshal(list.Attrs, &listAttrs); err != nil {
+		t.Fatalf("failed to unmarshal taskList attrs: %v", err)
+	}
+	if listAttrs.LocalID == "" {
+		t.Fatal("expected taskList localId to be set")
+	}
+
+	parent := list.Content[0]
+	if parent.Type != "taskItem" {
+		t.Fatalf("expected parent taskItem, got %s", parent.Type)
+	}
+
+	if len(parent.Content) < 2 {
+		t.Fatalf("expected parent to contain text and nested taskList, got %d nodes", len(parent.Content))
+	}
+
+	nested := parent.Content[len(parent.Content)-1]
+	if nested.Type != "taskList" {
+		t.Fatalf("expected nested taskList, got %s", nested.Type)
+	}
+
+	if len(nested.Content) != 1 || nested.Content[0].Type != "taskItem" {
+		t.Fatalf("expected one nested taskItem, got %+v", nested.Content)
+	}
+
+	var attrs TaskItemAttrs
+	if err := json.Unmarshal(nested.Content[0].Attrs, &attrs); err != nil {
+		t.Fatalf("failed to unmarshal nested task attrs: %v", err)
+	}
+	if attrs.LocalID == "" {
+		t.Fatal("expected nested task localId to be set")
+	}
+	if attrs.State != "TODO" {
+		t.Fatalf("expected nested task state TODO, got %s", attrs.State)
+	}
+}
+
 func TestConvert_CodeBlock(t *testing.T) {
 	md := "```javascript\nconst x = 1;\n```"
 	doc, err := ConvertToDoc(md)

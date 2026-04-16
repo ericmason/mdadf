@@ -136,6 +136,14 @@ func (c *adfConverter) convertNode(n ast.Node) *Node {
 	case *east.Strikethrough:
 		return c.convertStrikethrough(node)
 
+	case *east.TaskCheckBox:
+		text := "[ ] "
+		if node.IsChecked {
+			text = "[x] "
+		}
+		marker := TextNode(text)
+		return &marker
+
 	default:
 		// For unknown nodes, try to convert children
 		children := c.convertChildren(n)
@@ -166,6 +174,21 @@ func (c *adfConverter) convertHeading(node *ast.Heading) *Node {
 
 // convertList converts a markdown list to ADF
 func (c *adfConverter) convertList(node *ast.List) *Node {
+	if c.isTaskList(node) {
+		var items []Node
+		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+			listItem, ok := child.(*ast.ListItem)
+			if !ok {
+				continue
+			}
+			if converted := c.convertTaskListItem(listItem); converted != nil {
+				items = append(items, *converted)
+			}
+		}
+		list := TaskListNode(items...)
+		return &list
+	}
+
 	items := c.convertChildren(node)
 	if node.IsOrdered() {
 		list := OrderedListNode(items...)
@@ -202,6 +225,79 @@ func (c *adfConverter) convertListItem(node *ast.ListItem) *Node {
 		}
 	}
 	item := ListItemNode(content...)
+	return &item
+}
+
+// isTaskList reports whether an unordered markdown list consists entirely of task items.
+func (c *adfConverter) isTaskList(node *ast.List) bool {
+	if node.IsOrdered() || node.FirstChild() == nil {
+		return false
+	}
+
+	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+		listItem, ok := child.(*ast.ListItem)
+		if !ok {
+			return false
+		}
+		if _, ok := c.getTaskListItemState(listItem); !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+// getTaskListItemState returns the checked state for a Goldmark task list item.
+func (c *adfConverter) getTaskListItemState(node *ast.ListItem) (bool, bool) {
+	firstChild := node.FirstChild()
+	if firstChild == nil {
+		return false, false
+	}
+
+	firstInline := firstChild.FirstChild()
+	if firstInline == nil {
+		return false, false
+	}
+
+	checkbox, ok := firstInline.(*east.TaskCheckBox)
+	if !ok {
+		return false, false
+	}
+
+	return checkbox.IsChecked, true
+}
+
+func (c *adfConverter) convertTaskListItem(node *ast.ListItem) *Node {
+	checked, ok := c.getTaskListItemState(node)
+	if !ok {
+		return c.convertListItem(node)
+	}
+
+	var content []Node
+	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+		switch child := child.(type) {
+		case *ast.TextBlock:
+			inlineContent := c.convertInlineChildrenSkippingTaskCheckbox(child)
+			if len(inlineContent) > 0 {
+				content = append(content, inlineContent...)
+			}
+		case *ast.Paragraph:
+			inlineContent := c.convertInlineChildrenSkippingTaskCheckbox(child)
+			if len(inlineContent) > 0 {
+				content = append(content, inlineContent...)
+			}
+		case *ast.List:
+			if converted := c.convertList(child); converted != nil {
+				content = append(content, *converted)
+			}
+		default:
+			if converted := c.convertNode(child); converted != nil {
+				content = append(content, *converted)
+			}
+		}
+	}
+
+	item := TaskItemNode(checked, content...)
 	return &item
 }
 
@@ -474,6 +570,14 @@ func (c *adfConverter) convertStrikethrough(node *east.Strikethrough) *Node {
 
 // convertInlineChildren converts inline children (text, emphasis, links, etc.)
 func (c *adfConverter) convertInlineChildren(n ast.Node) []Node {
+	return c.convertInlineChildrenInternal(n, false)
+}
+
+func (c *adfConverter) convertInlineChildrenSkippingTaskCheckbox(n ast.Node) []Node {
+	return c.convertInlineChildrenInternal(n, true)
+}
+
+func (c *adfConverter) convertInlineChildrenInternal(n ast.Node, skipTaskCheckbox bool) []Node {
 	var nodes []Node
 	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
 		switch node := child.(type) {
@@ -514,6 +618,15 @@ func (c *adfConverter) convertInlineChildren(n ast.Node) []Node {
 		case *east.Strikethrough:
 			strikeNodes := c.convertStrikethroughInline(node)
 			nodes = append(nodes, strikeNodes...)
+		case *east.TaskCheckBox:
+			if skipTaskCheckbox {
+				continue
+			}
+			marker := "[ ] "
+			if node.IsChecked {
+				marker = "[x] "
+			}
+			nodes = append(nodes, TextNode(marker))
 		default:
 			// Try to get any text content
 			if converted := c.convertNode(child); converted != nil {

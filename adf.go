@@ -1,6 +1,10 @@
 package mdadf
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/google/uuid"
+)
 
 // Document represents the root ADF document
 type Document struct {
@@ -82,6 +86,17 @@ type OrderedListAttrs struct {
 	Order int `json:"order,omitempty"`
 }
 
+// TaskListAttrs holds attributes for task list nodes
+type TaskListAttrs struct {
+	LocalID string `json:"localId"`
+}
+
+// TaskItemAttrs holds attributes for task item nodes
+type TaskItemAttrs struct {
+	LocalID string `json:"localId"`
+	State   string `json:"state"`
+}
+
 // Helper functions to create common nodes
 
 // TextNode creates a text node with optional marks
@@ -134,6 +149,33 @@ func OrderedListNode(items ...Node) Node {
 func ListItemNode(content ...Node) Node {
 	return Node{
 		Type:    "listItem",
+		Content: content,
+	}
+}
+
+// TaskListNode creates a task list node
+func TaskListNode(items ...Node) Node {
+	attrs, _ := json.Marshal(TaskListAttrs{LocalID: uuid.NewString()})
+	return Node{
+		Type:    "taskList",
+		Attrs:   attrs,
+		Content: items,
+	}
+}
+
+// TaskItemNode creates a task item node with a Jira-compatible state
+func TaskItemNode(checked bool, content ...Node) Node {
+	state := "TODO"
+	if checked {
+		state = "DONE"
+	}
+	attrs, _ := json.Marshal(TaskItemAttrs{
+		LocalID: uuid.NewString(),
+		State:   state,
+	})
+	return Node{
+		Type:    "taskItem",
+		Attrs:   attrs,
 		Content: content,
 	}
 }
