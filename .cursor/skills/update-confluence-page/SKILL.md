@@ -1,25 +1,13 @@
 ---
 name: update-confluence-page
-description: Updates Confluence pages using the REST API v2 with ADF format. Use when updating Confluence pages, creating pages with ADF content, or when the user asks to update or create Confluence pages with markdown/ADF content.
+description: Updates Confluence pages with ADF content produced by mdadf, through the Atlassian MCP (or the REST API v2 as a fallback). Use when updating Confluence pages, creating pages with ADF content, or when the user asks to update or create Confluence pages with markdown/ADF content.
 ---
 
 # Update Confluence Pages
 
-Updates Confluence pages using the REST API v2 with Atlassian Document Format (ADF) content.
+Updates Confluence pages with Atlassian Document Format (ADF) content that `mdadf` converts from Markdown. Use the Atlassian MCP first. Use the REST API only if the MCP isn't available.
 
-## Authentication
-
-Get the API token from macOS Keychain:
-
-```bash
-TOKEN=$(security find-generic-password -l "acli" -w 2>&1 | sed 's/^go-keyring-base64://' | base64 -d)
-```
-
-The token is stored by `acli` and can be extracted this way.
-
-## Update Page with ADF Content
-
-### Step 1: Prepare ADF Content
+## Step 1: Convert Markdown to ADF
 
 Convert markdown to ADF JSON using the `mdadf` utility:
 
@@ -27,7 +15,32 @@ Convert markdown to ADF JSON using the `mdadf` utility:
 ./mdadf -c input.md > adf_content.json
 ```
 
-### Step 2: Create Update Payload
+## Step 2: Update the page with the Atlassian MCP
+
+The Atlassian MCP's `updateConfluencePage` and `createConfluencePage` tools take ADF directly: set `contentFormat: "adf"` and pass the ADF document as a JSON string in `body`.
+
+1. Call `getConfluencePage` with `cloudId: "equisolve.atlassian.net"` and the `pageId` to confirm the page and read its current title.
+2. Call `updateConfluencePage` with:
+   - `cloudId`: `"equisolve.atlassian.net"`
+   - `pageId`: the page ID
+   - `title`: the page title (keep the current title unless you're renaming the page)
+   - `contentFormat`: `"adf"`
+   - `body`: the contents of `adf_content.json`, as a string
+   - `versionMessage`: a short description of the change (optional)
+
+The MCP handles the version number, so you don't send one.
+
+To create a page instead, call `createConfluencePage` with `cloudId`, `spaceId`, `title`, `contentFormat: "adf"`, and `body` set the same way. Pass `parentId` to nest it under another page.
+
+If the `mcp__atlassian__*` tools aren't available, follow `mcp-setup.md` in the `jira` skill (equisolve/eq-agent-skills, `plugins/eq-dev/skills/jira/`), or use the REST API below.
+
+## REST API fallback
+
+Call the Confluence REST API v2 with the `jira-api` helper. It comes from the `jira` skill in equisolve/eq-agent-skills (`plugins/eq-dev/skills/jira/scripts/jira-api`). It reads the email and API token from `~/.config/jira/email` and `~/.config/jira/api-token` and keeps them out of the command line and output, and Confluence on the same site accepts the same token. Never read the token file yourself.
+
+The helper takes any path on the site: `jira-api [METHOD] <path> [json-body]`, where `json-body` is a JSON string or `@file`.
+
+### Create Update Payload
 
 Create a JSON payload with the ADF content:
 
@@ -62,19 +75,13 @@ with open('update_payload.json', 'w') as f:
 - Version number must be incremented from current version
 - Use `atlas_doc_format` representation for ADF content
 
-### Step 3: Make API Call
+### Make API Call
 
 ```bash
-TOKEN=$(security find-generic-password -l "acli" -w 2>&1 | sed 's/^go-keyring-base64://' | base64 -d)
-
-curl -X PUT "https://equisolve.atlassian.net/wiki/api/v2/pages/{PAGE_ID}" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json" \
-  -u "eric@equisolve.com:$TOKEN" \
-  -d @update_payload.json
+jira-api PUT /wiki/api/v2/pages/{PAGE_ID} @update_payload.json
 ```
 
-## Create New Page
+### Create New Page
 
 For creating a new page, use POST instead:
 
@@ -91,45 +98,39 @@ create_payload = {
 ```
 
 ```bash
-curl -X POST "https://equisolve.atlassian.net/wiki/api/v2/pages" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json" \
-  -u "eric@equisolve.com:$TOKEN" \
-  -d @create_payload.json
+jira-api POST /wiki/api/v2/pages @create_payload.json
 ```
 
-## Common Errors
+### Common Errors
 
 - **409 CONFLICT**: Version number not incremented. Get current version and increment it.
 - **400 INVALID_MESSAGE**: `value` must be a JSON string, not an object. Use `json.dumps()`.
-- **401 UNAUTHORIZED**: Token extraction failed. Verify acli is authenticated.
+- **401 UNAUTHORIZED**: The email or API token in `~/.config/jira/` is wrong or expired. Run `jira-api --help` for where to create a new token.
 
-## Get Current Page Version
+### Get Current Page Version
 
 To get the current version before updating:
 
 ```bash
-curl -s "https://equisolve.atlassian.net/wiki/api/v2/pages/{PAGE_ID}" \
-  -H "Accept: application/json" \
-  -u "eric@equisolve.com:$TOKEN" | \
+jira-api /wiki/api/v2/pages/{PAGE_ID} | \
   python3 -c "import sys, json; print(json.load(sys.stdin)['version']['number'])"
 ```
 
-## Complete Example
+To read the current body as ADF, add `?body-format=atlas_doc_format` to the path.
+
+### Complete Example
 
 ```bash
 # 1. Convert markdown to ADF
 ./mdadf -c plan.md > adf.json
 
 # 2. Get current version
-CURRENT_VERSION=$(curl -s "https://equisolve.atlassian.net/wiki/api/v2/pages/2254307333" \
-  -H "Accept: application/json" \
-  -u "eric@equisolve.com:$TOKEN" | \
+CURRENT_VERSION=$(jira-api /wiki/api/v2/pages/2254307333 | \
   python3 -c "import sys, json; print(json.load(sys.stdin)['version']['number'])")
 
 # 3. Create update payload
-python3 << 'PYEOF'
-import json
+CURRENT_VERSION=$CURRENT_VERSION python3 << 'PYEOF'
+import json, os
 with open('adf.json', 'r') as f:
     adf_doc = json.load(f)
 update_payload = {
@@ -140,24 +141,19 @@ update_payload = {
         "representation": "atlas_doc_format",
         "value": json.dumps(adf_doc)
     },
-    "version": {"number": CURRENT_VERSION + 1}
+    "version": {"number": int(os.environ["CURRENT_VERSION"]) + 1}
 }
 with open('update.json', 'w') as f:
     json.dump(update_payload, f, indent=2)
 PYEOF
 
 # 4. Update page
-TOKEN=$(security find-generic-password -l "acli" -w 2>&1 | sed 's/^go-keyring-base64://' | base64 -d)
-curl -X PUT "https://equisolve.atlassian.net/wiki/api/v2/pages/2254307333" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json" \
-  -u "eric@equisolve.com:$TOKEN" \
-  -d @update.json
+jira-api PUT /wiki/api/v2/pages/2254307333 @update.json
 ```
 
 ## Notes
 
-- Confluence accepts ADF format via `atlas_doc_format` representation
-- The MCP tool only supports `storage` format, so use REST API directly for ADF
+- The Atlassian MCP's `updateConfluencePage` and `createConfluencePage` accept `contentFormat: "adf"`, so you don't need the REST API to send ADF
+- Confluence accepts ADF format via `atlas_doc_format` representation in the REST API
 - Confluence converts ADF to storage format internally (this is normal)
 - API endpoint: `/wiki/api/v2/pages/{id}` for updates, `/wiki/api/v2/pages` for creates
