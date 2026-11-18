@@ -36,14 +36,9 @@ If the `mcp__atlassian__*` tools aren't available, follow `mcp-setup.md` in the 
 
 ## REST API fallback
 
-### Authentication
+Call the Confluence REST API v2 with the `jira-api` helper. It comes from the `jira` skill in equisolve/eq-agent-skills (`plugins/eq-dev/skills/jira/scripts/jira-api`). It reads the email and API token from `~/.config/jira/email` and `~/.config/jira/api-token` and keeps them out of the command line and output, and Confluence on the same site accepts the same token. Never read the token file yourself.
 
-Read the Atlassian account email and API token from the files the `jira-api` helper uses. Confluence on the same site accepts the same token.
-
-```bash
-EMAIL=$(cat ~/.config/jira/email)
-TOKEN=$(cat ~/.config/jira/api-token)
-```
+The helper takes any path on the site: `jira-api [METHOD] <path> [json-body]`, where `json-body` is a JSON string or `@file`.
 
 ### Create Update Payload
 
@@ -83,11 +78,7 @@ with open('update_payload.json', 'w') as f:
 ### Make API Call
 
 ```bash
-curl -X PUT "https://equisolve.atlassian.net/wiki/api/v2/pages/{PAGE_ID}" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json" \
-  -u "$EMAIL:$TOKEN" \
-  -d @update_payload.json
+jira-api PUT /wiki/api/v2/pages/{PAGE_ID} @update_payload.json
 ```
 
 ### Create New Page
@@ -107,29 +98,25 @@ create_payload = {
 ```
 
 ```bash
-curl -X POST "https://equisolve.atlassian.net/wiki/api/v2/pages" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json" \
-  -u "$EMAIL:$TOKEN" \
-  -d @create_payload.json
+jira-api POST /wiki/api/v2/pages @create_payload.json
 ```
 
 ### Common Errors
 
 - **409 CONFLICT**: Version number not incremented. Get current version and increment it.
 - **400 INVALID_MESSAGE**: `value` must be a JSON string, not an object. Use `json.dumps()`.
-- **401 UNAUTHORIZED**: The email or API token is wrong or expired. Check `~/.config/jira/email` and `~/.config/jira/api-token`.
+- **401 UNAUTHORIZED**: The email or API token in `~/.config/jira/` is wrong or expired. Run `jira-api --help` for where to create a new token.
 
 ### Get Current Page Version
 
 To get the current version before updating:
 
 ```bash
-curl -s "https://equisolve.atlassian.net/wiki/api/v2/pages/{PAGE_ID}" \
-  -H "Accept: application/json" \
-  -u "$EMAIL:$TOKEN" | \
+jira-api /wiki/api/v2/pages/{PAGE_ID} | \
   python3 -c "import sys, json; print(json.load(sys.stdin)['version']['number'])"
 ```
+
+To read the current body as ADF, add `?body-format=atlas_doc_format` to the path.
 
 ### Complete Example
 
@@ -137,17 +124,13 @@ curl -s "https://equisolve.atlassian.net/wiki/api/v2/pages/{PAGE_ID}" \
 # 1. Convert markdown to ADF
 ./mdadf -c plan.md > adf.json
 
-# 2. Read credentials and get current version
-EMAIL=$(cat ~/.config/jira/email)
-TOKEN=$(cat ~/.config/jira/api-token)
-CURRENT_VERSION=$(curl -s "https://equisolve.atlassian.net/wiki/api/v2/pages/2254307333" \
-  -H "Accept: application/json" \
-  -u "$EMAIL:$TOKEN" | \
+# 2. Get current version
+CURRENT_VERSION=$(jira-api /wiki/api/v2/pages/2254307333 | \
   python3 -c "import sys, json; print(json.load(sys.stdin)['version']['number'])")
 
 # 3. Create update payload
-python3 << 'PYEOF'
-import json
+CURRENT_VERSION=$CURRENT_VERSION python3 << 'PYEOF'
+import json, os
 with open('adf.json', 'r') as f:
     adf_doc = json.load(f)
 update_payload = {
@@ -158,18 +141,14 @@ update_payload = {
         "representation": "atlas_doc_format",
         "value": json.dumps(adf_doc)
     },
-    "version": {"number": CURRENT_VERSION + 1}
+    "version": {"number": int(os.environ["CURRENT_VERSION"]) + 1}
 }
 with open('update.json', 'w') as f:
     json.dump(update_payload, f, indent=2)
 PYEOF
 
 # 4. Update page
-curl -X PUT "https://equisolve.atlassian.net/wiki/api/v2/pages/2254307333" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json" \
-  -u "$EMAIL:$TOKEN" \
-  -d @update.json
+jira-api PUT /wiki/api/v2/pages/2254307333 @update.json
 ```
 
 ## Notes
